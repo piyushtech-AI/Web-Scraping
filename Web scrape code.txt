@@ -1,0 +1,57 @@
+import csv
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# ✅ Path to your local ChromeDriver
+service = Service('C:\\Users\\chromedriver-win64\\chromedriver.exe')
+driver = webdriver.Chrome(service=service)
+
+# ✅ Open the Physician Jobs page
+driver.get('https://www.doccafe.com/physician-jobs')
+driver.maximize_window()
+wait = WebDriverWait(driver, 20)
+
+# ✅ Click the Specialty dropdown
+try:
+    dropdown = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(),'Specialty')]")))
+    dropdown.click()
+    print("✅ Clicked Specialty dropdown.")
+except Exception as e:
+    print("❌ Failed to click dropdown:", e)
+    driver.quit()
+    exit()
+
+# ✅ Wait for dropdown options to load
+time.sleep(4)
+
+# ✅ Extract specialty options
+try:
+    options = driver.find_elements(By.XPATH, "//div[@role='listbox']//div[@role='option']")
+    print(f"✅ Found {len(options)} specialty options.")
+
+    if not options:
+        print("❌ No options found. Possible DOM issue.")
+
+    specialties = [opt.text.strip() for opt in options if opt.text.strip()]
+
+    # ✅ Print and save to CSV
+    print("🩺 Extracted Specialties:")
+    for idx, spec in enumerate(specialties, 1):
+        print(f"{idx}. {spec}")
+
+    with open('physician_specialties.csv', 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Specialty'])
+        for spec in specialties:
+            writer.writerow([spec])
+
+    print("\n✅ Saved to 'physician_specialties.csv'")
+
+except Exception as e:
+    print("❌ Could not extract specialty options. Error:", e)
+
+driver.quit()

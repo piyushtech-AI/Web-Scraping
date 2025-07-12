@@ -1,0 +1,88 @@
+import os
+import re
+import pdfplumber
+import pandas as pd
+
+# Define the folder containing PDF resumes
+RESUME_FOLDER = r""C:\Important Data migration files\PDF RESUME"
+OUTPUT_CSV = r"C:\Important Data migration files\Testing_piyush_resumes.csv"
+
+# Define regex patterns for extraction
+EMAIL_PATTERN = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+PHONE_PATTERN = r"\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}\b"
+NAME_PATTERN = r"\b[A-Z][a-zA-Z\-]+(?:\s[A-Z][a-zA-Z\-]+)+\b"  # Better handling for names
+ADDRESS_PATTERN = r"\d{1,5}\s\w+(?:\s\w+)*,\s\w+(?:\s\w+)*,\s\w{2,}\s\d{5}"
+EXPERIENCE_PATTERN = r"(\d+)\s*(?:years|yrs|Year|Yr|Yrs|year) of experience"
+
+# Skill categories
+SKILL_1 = {"Administrative", "Audiologist", "Behavioral Health", "Cardiology", "Chiropractor", "Clinical Support Tech", "CNA", "Dentistry", "Dialysis Tech", "Dietary Services", "EMT", "Environmental Services", "ER Tech", "Finance/Accounting", "Food and Nutrition Services", "Health and Information Management", "Human Resources", "Laboratory", "LPN", "LVN", "Medical Assistant", "Neuro Diagnostics", "Nurse Practitioner", "Occupational Therapy", "Ophthalmology", "Paramedic", "Patient Care Technician", "Perfusionist", "Pharmacy", "Physical Therapy", "Physicist", "Radiology/Imaging", "Respiratory Therapy", "RN", "Sitter", "Social Services", "Speech Therapy", "Sports Medicine", "Surgical Services"}
+SKILL_2 = {"Administrative Assistant", "Administrative Coordinator", "Administrative Representative", "Clerk", "Clinical Research Manager", "Clinical Services Manager", "Community Outreach Specialist", "Customer Service Representative", "Department Coordinator", "Executive Assistant", "Ground Manager", "Guest Services Coordinator", "Patient Liaison", "Patient Screener", "Secretary", "Staffing Coordinator", "Audiologist", "Behavioral Health Assistant", "Behavioral Health Tech", "Cath Lab Manager", "Cath Lab Tech", "EKG Tech", "Electrophysiology Tech", "Holter Monitor/Stress Test Technician", "Chiropractor", "Chiropractor Assistant", "Clinical Support Tech", "Acute Care", "Geriatrics", "LTAC", "LTC", "Pediatrics", "Dental Assistant", "Dental Hygienist", "Dental Technician", "Dental Therapist", "Dentist", "Denturist", "Endodontist", "Oral Surgeon", "Orthodontist", "Pedodontist/Pediatric Dentist", "Periodontist", "Dialysis Tech", "Clinical Nutrition Manager", "Dietary Aide", "Dietetic Technician", "Dietitian", "EMS Educator", "EMT", "Consultant", "Custodial Supervisor", "Custodian", "Equipment Processor", "EVS Aide", "Floor Care Aide", "Housekeeper", "Linen Aide", "Linen Tech", "ER Tech", "Accounts Payable Clerk", "Accounts Receivable Clerk", "Audit Manager", "Billing Specialist", "Business Analyst", "Claims Processor", "Data Analyst", "Finance Clerk", "Financial Administrative Assistant", "Financial Coordinator", "Medical Billing Specialist", "Patient Accountant", "Patient Services Coordinator", "Payroll Coordinator", "Scheduling Coordinator", "Barista", "Cashier", "Chef", "Dishwasher", "Food Service Tech", "Nutrition Clerk", "Room Service Attendant", "Auditor", "Coding Compliance Coordinator", "Credentialing Coordinator", "Credentialing Specialist", "Data Entry Clerk", "Health Information Manager", "Health Information Specialist", "HIM Director", "Medical Coder - Inpatient", "Medical Coder - Outpatient", "Medical Scribe", "Medical Transcriptionist", "Patient Access Coordinator", "Patient Access Manager", "Patient Access Specialist", "Project Manager", "Technical Writer", "Benefits Analyst", "Benefits Manager", "Benefits Specialist", "Human Resources Representative", "Recruiter", "Clinical Lab Scientist", "Contractor", "Cyto Tech", "Director", "Embryologist", "Histology Tech", "Laboratory Assistant", "Manager", "Medical Lab Scientist", "Medical Lab Technician", "Medical Technologist", "Metabolomic Technician", "Microbiology Tech", "Pathology Assistant", "Phlebotomist", "Acute Rehab", "Ambulatory", "Case Manager", "Corrections", "Dialysis", "Emergency Room", "Endocrinology", "Executive Health/Internal Medicine", "GI/Endoscopy", "Home Health", "Hospice", "Long Term Acute Care (LTAC)", "Long Term Care", "MedSurg", "MedSurg / Tele", "Occupational Health", "Oncology", "Operating Room", "Outpatient Clinic", "Patient Care Coordinator", "Psych", "Public Health", "Reconstructive Surgery", "Rehab", "School", "SNF", "Sub Acute", "Urgent Care", "Urology", "Utilization Review", "Vaccinator", "Vascular Surgery", "Allergy and Immunology", "Dermatology", "Family Practice", "Float Pool", "Internal Medicine", "OB/GYN", "Otorhinolaryngology (ENT)", "Pain Management", "Vaccination Support", "Certified Hyperbaric Specialist", "Certified Hyperbaric Technician", "EEG Tech", "EEG Tech Manager", "Hyperbaric Technician", "Intraoperative Neuromonitoring Tech", "Polysomnographer/Sleep Tech", "Behavioral Health", "Nurse Practitioner", "Primary Care", "Certified Occupational Therapist Assistant (COTA)", "COTA Acute Care", "COTA Behavioral Health", "COTA Home Health", "COTA Inpatient Rehab", "COTA LTAC", "COTA Outpatient", "COTA Pediatrics", "COTA SNF", "Occupational Therapist (OT)", "OT Acute Care", "OT Behavioral Health", "OT Home Health", "OT Inpatient Rehab", "OT LTAC", "OT Outpatient", "OT Pediatrics", "OT SNF", "Ophthalmic Technician", "Optician", "Optometrist", "Paramedic", "Patient Care Technician", "Perfusionist", "Apprentice", "Pharmacist - Inpatient", "Pharmacist - Outpatient", "Pharmacy Tech Inpatient", "Pharmacy Tech Outpatient", "Physical Therapist (PT)", "Physical Therapist Assistant (PTA)", "PT Acute Care", "PT Aide", "PT Behavioral Health", "PT Home Health", "PT Inpatient Rehab", "PT LTAC", "PT Outpatient", "PT Pediatrics", "PT SNF", "PTA Acute Care", "PTA Behavioral Health", "PTA Home Health", "PTA Inpatient Rehab", "PTA LTAC", "PTA Outpatient", "PTA Pediatrics", "PTA SNF", "Rehab Aide", "Medical Physicist", "Radiation Oncology", "CT Tech", "Diagnostic Imaging Assistant", "Dosimetrist", "Echo Tech/Cardiac Sonographer", "Echo Tech/Cardiac Sonographer Pediatrics", "Interventional Radiology Tech", "Mammography Tech", "Monitor Tech", "MRI Tech", "Nuclear Medicine Tech", "Radiation Therapist", "Radiology Manager", "Registered Radiology Assistant", "Sonographer", "Special Procedures", "Ultrasound Tech - General", "Ultrasound Tech - OB/GYN", "Ultrasound Tech - Vascular", "X-Ray Tech", "Pulmonary Function Technologist", "Registered Respiratory Therapist", "Registered Respiratory Therapist - LTAC", "Registered Respiratory Therapist - NICU", "Registered Respiratory Therapist - Pediatrics", "Registered Respiratory Therapist - PICU", "Cardiac PCU/IMC/Stepdown", "Cath Lab", "Certified Nurse Midwife", "Certified Registered Nurse Anesthetist (CRNA)", "Clinical Nurse Specialist", "Clinical Research", "COVID", "CVICU", "CVOR", "Educator", "Electrophysiology (EP) Lab", "ER", "GI / Endoscopy", "House Supervisor", "ICU", "Infection Control", "Infusion", "Interventional Radiology", "IV Therapy", "L&D", "Long Term Care (LTC)", "Mother Baby", "Neuro ICU", "Neuro PCU/IMC/Stepdown", "NICU", "Nursery", "OB", "Observation Unit", "Ortho", "PACU", "Palliative Care", "PCU/IMC/Stepdown", "Pediatric ER", "Pediatric Wound Care", "PICC", "PICU", "Post-Partum", "Pre-Op/Post-Op/Same Day Surgery", "Registered Nurse First Assist (RNFA)", "Telemetry", "Transplant", "Triage", "Vaccination", "Wound Care", "Sitter", "Case Worker", "Certified Social Worker (CSW)", "Licensed Clinical Social Worker (LCSW)", "Licensed Marriage and Family Therapist", "Licensed Professional Clinical Counselor", "Licensed Professional Counselor", "Medical Social Worker", "Mental Health", "School Social Worker", "Social Worker Assistant", "SLP Behavioral Health", "SLP Home Health", "SLP Inpatient Rehab", "SLP LTAC", "SLP Outpatient", "SLP Pediatrics", "SLP SNF", "SLPA Behavioral Health", "SLPA Inpatient Rehab", "SLPA LTAC", "SLPA Outpatient", "SLPA SNF", "Speech Language Pathologist (SLP)", "Speech Language Pathologist Assistant (SLPA)", "Athletic Trainer", "Exercise Instructor", "Exercise Physiologist", "Kinesiotherapist", "Yoga Instructor", "Anesthesia Technician", "Certified Cardiac First Assist", "Certified OR Tech / Surgical Tech (CST)", "Certified Ortho Tech", "Certified Surgical First Assist", "CVOR Certified Surgical First Assist", "CVOR Tech", "GR / Endo Tech", "OB Tech", "OR Tech / Surgical Tech", "Pediatric CVOR Tech", "Pediatric OR Tech / Surgical Tech", "Pediatric Sterile Processing Tech (SPT)", "Perioperative Assistant", "Sterile Processing Tech (SPT)", "Surgical Support Aide"}
+SKILL_3 = {"Software Engineer", "Developer" , "JAVA", "ARCHITECT", "SOFTWARE"}
+
+# Skills keyword list (lowercase for case-insensitive search)
+ALL_SKILLS = SKILL_1 | SKILL_2 | SKILL_3  
+
+# Function to clean up text
+def clean_text(text):
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces/newlines with a single space
+    text = re.sub(r'[^\w\s.,;!?()-]', '', text)  # Remove special characters
+    return text.strip()
+
+# Function to extract name
+def extract_name_from_text(text):
+    name_match = re.search(NAME_PATTERN, text)
+    return name_match.group() if name_match else ""
+
+# Function to extract and categorize skills
+def extract_skills(text):
+    text_lower = text.lower()
+    extracted_skills = {skill for skill in ALL_SKILLS if re.search(rf'\b{skill.lower()}\b', text_lower)}
+
+    skill1 = ", ".join(extracted_skills & SKILL_1)
+    skill2 = ", ".join(extracted_skills & SKILL_2)
+    skill3 = ", ".join(extracted_skills & SKILL_3)
+
+    return skill1, skill2, skill3
+
+# Function to extract information from resume text
+def extract_info(text):
+    text_lower = text.lower()  
+
+    name = extract_name_from_text(text)
+    phone = re.findall(PHONE_PATTERN, text)[:1]
+    email = re.findall(EMAIL_PATTERN, text)[:1]
+    address = re.findall(ADDRESS_PATTERN, text)[:1]
+    experience = re.findall(EXPERIENCE_PATTERN, text)[:1]
+
+    skill1, skill2, skill3 = extract_skills(text)
+
+    cleaned_text = clean_text(text)
+
+    return {
+        "Name": name,
+        "Phone": phone[0] if phone else "",
+        "Email": email[0] if email else "",
+        "Address": address[0] if address else "",
+        "Experience (Years)": experience[0] if experience else "",
+        "Skill 1": skill1,
+        "Skill 2": skill2,
+        "Skill 3": skill3,
+        "Full Content": cleaned_text
+    }
+
+# Process all PDFs in the folder
+resumes_data = []
+for file in os.listdir(RESUME_FOLDER):
+    if file.endswith(".pdf"):
+        pdf_path = os.path.join(RESUME_FOLDER, file)
+        with pdfplumber.open(pdf_path) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            parsed_data = extract_info(text)
+            parsed_data["Filename"] = file
+            resumes_data.append(parsed_data)
+
+# Save extracted data to CSV
+df = pd.DataFrame(resumes_data)
+df.to_csv(OUTPUT_CSV, index=False)
+
+print(f"Piyush, your resume parsing has been completed! Extracted data saved to {OUTPUT_CSV}")
